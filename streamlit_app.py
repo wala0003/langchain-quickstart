@@ -1,33 +1,101 @@
+from pathlib import Path
+
 import streamlit as st
-from langchain.chat_models import ChatOpenAI
+
+from langchain import SQLDatabase
+from langchain.agents import AgentType
 from langchain.agents import initialize_agent, Tool
-from langchain.tools import DuckDuckGoSearchRun
-from langchain.tools import YouTubeSearchTool
+from langchain.callbacks import StreamlitCallbackHandler
+from langchain.chains import LLMMathChain, SQLDatabaseChain
+from langchain.llms import OpenAI
+from langchain.utilities import DuckDuckGoSearchAPIWrapper
 
 
-openai_api_key = st.sidebar.text_input('OpenAI API Key')
+from streamlit_agent.callbacks.capturing_callback_handler import playback_callbacks
+from streamlit_agent.clear_results import with_clear_container
 
-# Initialize your LLM Model
-#Create an instance of OpenAI LLM
-llm = ChatOpenAI(model_name='gpt-3.5-turbo',openai_api_key=openai_api_key ,temperature=0.1)
+DB_PATH = (Path(__file__).parent / "Chinook.db").absolute()
 
-# build a tool to search the internet
-search = DuckDuckGoSearchRun()
-yt = YouTubeSearchTool()
-search_tool = Tool(name="search_tool", description = "search the internet",func = search.run)
-yt_tool= Tool( name='Youtube', description="search youtube videos",func= yt.run)
-tools = [search_tool,yt_tool]
+SAVED_SESSIONS = {
+    "Who is Leo DiCaprio's girlfriend? What is her current age raised to the 0.43 power?": "leo.pickle",
+    "What is the full name of the artist who recently released an album called "
+    "'The Storm Before the Calm' and are they in the FooBar database? If so, what albums of theirs "
+    "are in the FooBar database?": "alanis.pickle",
+}
 
-#build our agent
-agent = initialize_agent(tools, llm, agent='zero-shot-react-description',verbose=True)
+st.set_page_config(
+    page_title="MRKL", page_icon="🦜", layout="wide", initial_sidebar_state="collapsed"
+)
 
-st.title('Langchain Search GPT tester')
-# Create a text input box for the user
-#Create a  Propmt 
-prompt = st.text_input('Input your prompt here')
+"# 🦜🔗 MRKL"
 
+# Setup credentials in Streamlit
+user_openai_api_key = st.sidebar.text_input(
+    "OpenAI API Key", type="password", help="Set this to run your own custom questions."
+)
 
-# If user hits enter
-if prompt:
-  response =agent.run(prompt)
-  st.write(response)
+if user_openai_api_key:
+    openai_api_key = user_openai_api_key
+    enable_custom = True
+else:
+    openai_api_key = "not_supplied"
+    enable_custom = False
+
+# Tools setup
+llm = OpenAI(temperature=0, openai_api_key=openai_api_key, streaming=True)
+search = DuckDuckGoSearchAPIWrapper()
+llm_math_chain = LLMMathChain.from_llm(llm)
+db = SQLDatabase.from_uri(f"sqlite:///{DB_PATH}")
+db_chain = SQLDatabaseChain.from_llm(llm, db)
+tools = [
+    Tool(
+        name="Search",
+        func=search.run,
+        description="useful for when you need to answer questions about current events. You should ask targeted questions",
+    ),
+    Tool(
+        name="Calculator",
+        func=llm_math_chain.run,
+        description="useful for when you need to answer questions about math",
+    ),
+    Tool(
+        name="FooBar DB",
+        func=db_chain.run,
+        description="useful for when you need to answer questions about FooBar. Input should be in the form of a question containing full context",
+    ),
+]
+
+# Initialize agent
+mrkl = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
+
+with st.form(key="form"):
+    if not enable_custom:
+        "Ask one of the sample questions, or enter your API Key in the sidebar to ask your own custom questions."
+    prefilled = st.selectbox("Sample questions", sorted(SAVED_SESSIONS.keys())) or ""
+    user_input = ""
+
+    if enable_custom:
+        user_input = st.text_input("Or, ask your own question")
+    if not user_input:
+        user_input = prefilled
+    submit_clicked = st.form_submit_button("Submit Question")
+
+output_container = st.empty()
+if with_clear_container(submit_clicked):
+    output_container = output_container.container()
+    output_container.chat_message("user").write(user_input)
+
+    answer_container = output_container.chat_message("assistant", avatar="🦜")
+    st_callback = StreamlitCallbackHandler(answer_container)
+
+    # If we've saved this question, play it back instead of actually running LangChain
+    # (so that we don't exhaust our API calls unnecessarily)
+    if user_input in SAVED_SESSIONS:
+        session_name = SAVED_SESSIONS[user_input]
+        session_path = Path(__file__).parent / "runs" / session_name
+        print(f"Playing saved session: {session_path}")
+        answer = playback_callbacks([st_callback], str(session_path), max_pause_time=2)
+    else:
+        answer = mrkl.run(user_input, callbacks=[st_callback])
+
+    answer_container.write(answer)
