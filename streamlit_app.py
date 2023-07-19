@@ -1,7 +1,7 @@
 import streamlit as st
 from langchain.chat_models import ChatOpenAI
 from langchain.agents import initialize_agent
-from langchain.agents import Tools
+from langchain.agents import Tool
 from langchain.tools import DuckDuckGoSearchRun
 from langchain.tools import YouTubeSearchTool
 
