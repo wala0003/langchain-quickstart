@@ -25,7 +25,7 @@ agent = initialize_agent(tools, llm, agent='zero-shot-react-description',verbose
 st.title('Langchain Search GPT tester')
 # Create a text input box for the user
 #Create a  Propmt 
-prompt =  st.text_input('Input your prompt here')
+prompt = st.text_input('Input your prompt here')
 
 
 # If user hits enter
