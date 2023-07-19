@@ -1,18 +1,36 @@
 import streamlit as st
-from langchain.llms import OpenAI
-st.set_page_config(page_title="🦜🔗 Quickstart App")
-st.title('🦜🔗 Quickstart App')
+from langchain.chat_models import ChatOpenAI
+from langchain.agents import initialize_agent
+from langchain.agents import Tools
+from langchain.tools import DuckDuckGoSearchRun
+from langchain.tools import YouTubeSearchTool
+
 
 openai_api_key = st.sidebar.text_input('OpenAI API Key')
 
-def generate_response(input_text):
-  llm = OpenAI(temperature=0.7, openai_api_key=openai_api_key)
-  st.info(llm(input_text))
+# Initialize your LLM Model
+#Create an instance of OpenAI LLM
+llm = ChatOpenAI(model_name='gpt-3.5-turbo-16k',openai_api_key=openai_api_key ,temperature=0.1)
 
-with st.form('my_form'):
-  text = st.text_area('Enter text:', 'What are the three key pieces of advice for learning how to code?')
-  submitted = st.form_submit_button('Submit')
-  if not openai_api_key.startswith('sk-'):
-    st.warning('Please enter your OpenAI API key!', icon='⚠')
-  if submitted and openai_api_key.startswith('sk-'):
-    generate_response(text)
+# build a tool to search the internet
+search = DuckDuckGoSearchRun()
+yt = YouTubeSearchTool()
+search_tool = Tool(name="search_tool", description = "search the internet",func = search.run)
+yt_tool= Tool( name='Youtube', description="search youtube videos",func= yt.run)
+tools = [search_tool,yt_tool]
+
+#build our agent
+agent = initialize_agent(tools, llm, agent='zero-shot-react-description',verbose=True)
+
+st.title('Langchain Search GPT tester')
+# Create a text input box for the user
+#Create a  Propmt 
+prompt =  st.text_input('Input your prompt here')
+
+
+# If user hits enter
+if prompt:
+    #then pass the prompt to the llm
+    response =agent.run(prompt)
+    #and write out tot the screen 
+    st.write(response)
