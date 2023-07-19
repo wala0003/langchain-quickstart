@@ -10,7 +10,7 @@ openai_api_key = st.sidebar.text_input('OpenAI API Key')
 
 # Initialize your LLM Model
 #Create an instance of OpenAI LLM
-llm = ChatOpenAI(model_name='gpt-3.5-turbo-16k',openai_api_key=openai_api_key ,temperature=0.1)
+llm = ChatOpenAI(model_name='gpt-3.5-turbo',openai_api_key=openai_api_key ,temperature=0.1)
 
 # build a tool to search the internet
 search = DuckDuckGoSearchRun()
