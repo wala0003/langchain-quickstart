@@ -30,7 +30,5 @@ prompt = st.text_input('Input your prompt here')
 
 # If user hits enter
 if prompt:
-    #then pass the prompt to the llm
-    response =agent.run(prompt)
-    #and write out tot the screen 
-    st.write(response)
+  response =agent.run(prompt)
+  st.write(response)
