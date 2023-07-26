@@ -1,4 +1,5 @@
 import streamlit as st
+import langchain
 from langchain.tools import BaseTool
 from scrapingbee import ScrapingBeeClient
 from trafilatura import extract
