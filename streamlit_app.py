@@ -1,36 +1,35 @@
-from langchain.agents import initialize_agent, AgentType
-from langchain.callbacks import StreamlitCallbackHandler
-from langchain.chat_models import ChatOpenAI
-from langchain.tools import DuckDuckGoSearchRun
 import streamlit as st
+from langchain.tools import BaseTool
+from scrapingbee import ScrapingBeeClient
+from trafilatura import extract
+from langchain.llms import OpenAI
 
-st.set_page_config(page_title="LangChain: Chat with search", page_icon="🦜")
-st.title("🦜 LangChain: Chat with search")
+class ScrapingBeeTool(BaseTool):
 
-openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
-if "messages" not in st.session_state:
-    st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
+    def __init__(self, api_key):
+        self.api_key = api_key
+        self.client = ScrapingBeeClient(self.api_key)
+        
+    def run(self, prompt):
+        response = self.client.get(url=prompt, proxy=True)
+        extracted = extract(response.content)
+        llm = OpenAI(temperature=0.7) 
+        return llm.generate(extracted)
 
-for msg in st.session_state.messages:
-    st.chat_message(msg["role"]).write(msg["content"])
+# Streamlit app
+st.set_page_config(page_title="Web Summary")
+st.title("Web Page Summarizer")
 
-if prompt := st.chat_input(placeholder="Who won the Women's U.S. Open in 2018?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.chat_message("user").write(prompt)
+# Sidebar for API keys
+st.sidebar.title('API Keys')
+scrapingbee_key = st.sidebar.text_input('ScrapingBee API Key')
+openai_key = st.sidebar.text_input('OpenAI API Key') 
 
-    if not openai_api_key:
-        st.info("Please add your OpenAI API key to continue.")
-        st.stop()
+url = st.text_input('Enter a URL to summarize:')
 
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key, streaming=True)
-    search_agent = initialize_agent(
-        tools=[DuckDuckGoSearchRun(name="Search")],
-        llm=llm,
-        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-        handle_parsing_errors=True,
-    )
-    with st.chat_message("assistant"):
-        st_cb = StreamlitCallbackHandler(st.container(), expand_new_thoughts=False)
-        response = search_agent.run(st.session_state.messages, callbacks=[st_cb])
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        st.write(response)
+if st.button('Get Summary'):
+    tool = ScrapingBeeTool(api_key=scrapingbee_key)
+    llm = OpenAI(openai_key, temperature=0.7)
+    summary = tool.run(url)
+    
+    st.write(summary)
